@@ -171,6 +171,7 @@ if [ ! -z "$failedlist" ] ; then
 	for f in $failedlist
 	do
 		if [ -e "$HISTORY_DIR/$f/backup" ] ; then
+			sleep 1
 			war="$DEPLOY_DIR/$f"
 			rm -rf "$war"
 			rm -f "$war."*
