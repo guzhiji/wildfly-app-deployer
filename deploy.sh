@@ -2,7 +2,7 @@
 onDeploymentSuccess() {
 	f=$1
 	war="$DEPLOY_DIR/$f"
-	if [ -d "$HISTORY_DIR/$f/lastid" ] ; then
+	if [ -f "$HISTORY_DIR/$f/lastid" ] ; then
 		nextid=`cat "$HISTORY_DIR/$f/lastid"`
 		nextid=$(($nextid+1))
 	else
@@ -13,19 +13,12 @@ onDeploymentSuccess() {
 		rm -rf "$HISTORY_DIR/$f/backup"
 	fi
 	echo "$nextid" > "$HISTORY_DIR/$f/lastid"
-	echo "$f deployed"
+	echo "$f deployed (version: $nextid)"
 }
 
 onDeploymentFailure() {
 	f=$1
-	war="$DEPLOY_DIR/$f"
 	rm -f "$HISTORY_DIR/$f/new"
-	if [ -e "$HISTORY_DIR/$f/backup" ] ; then
-		rm -rf "$war"
-		rm -f "$war."*
-		mv -f "$HISTORY_DIR/$f/backup" "$war"
-		touch "$war.dodeploy"
-	fi
 	echo "$f failed"
 }
 
@@ -169,10 +162,22 @@ do
 done
 
 echo
+echo 'Waiting for deployment:'"$filelist"
 waitForDeployment onDeploymentSuccess onDeploymentFailure $filelist
-echo
 
 if [ ! -z "$failedlist" ] ; then
+	echo
+	echo 'Recovery:'"$failedlist"
+	for f in $failedlist
+	do
+		if [ -e "$HISTORY_DIR/$f/backup" ] ; then
+			war="$DEPLOY_DIR/$f"
+			rm -rf "$war"
+			rm -f "$war."*
+			mv -f "$HISTORY_DIR/$f/backup" "$war"
+			touch "$war.dodeploy"
+		fi
+	done
 	waitForDeployment onRecoverySuccess onRecoveryFailure $failedlist
 fi
 
