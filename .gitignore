@@ -2,4 +2,5 @@
 *.war
 *.conf
 *~
+tmp
 

@@ -1,18 +1,19 @@
 
+cd `dirname "$0"`
+
+# load common
+if [ ! -f ./common.sh ] ; then
+	echo 'cannot load common.sh library' >&2
+	exit 1
+fi
+. ./common.sh
+
 onDeploymentSuccess() {
 	f=$1
-	war="$DEPLOY_DIR/$f"
-	if [ -f "$HISTORY_DIR/$f/lastid" ] ; then
-		nextid=`cat "$HISTORY_DIR/$f/lastid"`
-		nextid=$(($nextid+1))
-	else
-		nextid=1
-	fi
-	mv -f "$HISTORY_DIR/$f/new" "$HISTORY_DIR/$f/$nextid"
 	if [ -f "$HISTORY_DIR/$f/backup" ] ; then
 		rm -rf "$HISTORY_DIR/$f/backup"
 	fi
-	echo "$nextid" > "$HISTORY_DIR/$f/lastid"
+	nextid=$(updateHistory "$f")
 	echo "$f deployed (version: $nextid)"
 }
 
@@ -30,97 +31,14 @@ onRecoveryFailure() {
 	echo "$1 failed to recover"
 }
 
-waitForDeployment() {
-	finishedlist=
-	failedlist=
-	while [ 1 == 1 ]
-	do
-		shouldwait='n'
-		n=0
-		for f in $@
-		do
-			n=$(($n+1))
-			if [ $n -lt 3 ] ; then
-				continue # skip $1 $2
-			fi
-			war="$DEPLOY_DIR/$f"
-			if [ -f "$war.deployed" ] ; then
-				known='n'
-				for ff in $finishedlist
-				do
-					if [ "$ff" == "$f" ] ; then
-						known='y'
-						break
-					fi
-				done
-				if [ "$known" == 'n' ] ; then
-					$1 $f
-					finishedlist="$finishedlist $f"
-				fi
-			elif [ -f "$war.failed" ] ; then
-				known='n'
-				for ff in $failedlist
-				do
-					if [ "$ff" == "$f" ] ; then
-						known='y'
-						break
-					fi
-				done
-				if [ "$known" == 'n' ] ; then
-					$2 $f
-					failedlist="$failedlist $f"
-				fi
-			elif [ ! -f "$war.undeployed" ] ; then
-				shouldwait='y'
-			fi
-		done
-		if [ "$shouldwait" == 'y' ] ; then
-			sleep 1
-		else
-			break
-		fi
-	done
-}
 
-
-cd `dirname "$0"`
-
-if [ -f /etc/default/wildfly ] ; then
-	. /etc/default/wildfly
-elif [ -f ./local.conf ] ; then
-	. ./local.conf
-fi
-if [ ! -d "$JAVA_HOME" ] ; then
-	echo 'cannot find JAVA_HOME' >&2
-	exit 1
-fi
-if [ ! -d "$JBOSS_HOME" ] ; then
-	echo 'cannot find JBOSS_HOME' >&2
-	exit 1
-fi
-if [ ! -d "$HISTORY_DIR" ] ; then
-	echo 'cannot find HISTORY_DIR' >&2
-	exit 1
-fi
-if [ ! -d "$CONF_DIR" ] ; then
-	echo 'cannot find CONF_DIR' >&2
-	exit 1
-fi
-
-echo "JAVA_HOME: $JAVA_HOME"
-echo "JBOSS_HOME: $JBOSS_HOME"
-echo "HISTORY_DIR: $HISTORY_DIR"
-echo "CONF_DIR: $CONF_DIR"
-export PATH="$JAVA_HOME/bin:$PATH"
-echo "PATH: $PATH"
-echo
+loadConf
 
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 filelist=
 for f in *
 do
 	if [[ "$f" =~ \.war$ ]] ; then
-		filelist="$filelist $f"
 		echo "deploying $f"
 
 		# extract war
@@ -129,35 +47,44 @@ do
 			rm -rf tmp
 		fi
 		mkdir tmp
-		cd tmp
-		mv -f "../$f" .
-		unzip -q "$f"
+		unzip -q "$f" -d tmp
+		if [ $? != 0 ] ; then
+			echo -e "\t${RED}failed to extract the war file{NC}"
+			rm -rf tmp
+			continue
+		fi
+
+		# undeploy war
+		war="$DEPLOY_DIR/$f"
+		if [ -e "$war" ] ; then
+			echo -e "\tundeploying previous version"
+			if [ $(undeploy "$f") == 'error' ] ; then
+				echo -e "\t${RED}failed to undeploy $f${NC}"
+				rm -rf tmp
+				continue
+			fi
+			# backup the original war
+			echo -e "\tbacking up"
+			backupDeployment "$f" 'clean'
+			rm -f "$war."* # remove flag files
+		fi
+		# otherwise it's a new deployment
+
+		# put away the new war
 		if [ ! -d "$HISTORY_DIR/$f" ] ; then
 			mkdir "$HISTORY_DIR/$f"
 		fi
 		mv -f "$f" "$HISTORY_DIR/$f/new"
-		cd ..
 
-		# undeploy war
-		echo -e "\tundeploying previous version"
-		$JBOSS_HOME/bin/jboss-cli.sh --connect --command='undeploy'" $f"
-		war="$DEPLOY_DIR/$f"
-		if [ -e "$war" ] ; then
-			if [ -e "$HISTORY_DIR/$f/backup" ] ; then
-				rm -rf "$HISTORY_DIR/$f/backup"
-			fi
-			mv -f "$war" "$HISTORY_DIR/$f/backup"
-			rm -f "$war."*
-		fi
-
-		# deploy new war directory
+		# deploy the new war directory
 		echo -e "\tdeploying"
 		mv -f tmp "$war"
+		# override config files
 		if [ -d "$CONF_DIR/$f" ] ; then
-			# override config
 			cp -rf --backup=none "$CONF_DIR/$f/"* "$war"
 		fi
 		touch "$war.dodeploy"
+		filelist="$filelist $f"
 	fi
 done
 
@@ -167,17 +94,11 @@ waitForDeployment onDeploymentSuccess onDeploymentFailure $filelist
 
 if [ ! -z "$failedlist" ] ; then
 	echo
-	echo 'Recovery:'"$failedlist"
-	for f in $failedlist
+	echo "Recovery: $failedlist"
+	for f in $(recoverWarFiles $failedlist)
 	do
-		if [ -e "$HISTORY_DIR/$f/backup" ] ; then
-			sleep 1
-			war="$DEPLOY_DIR/$f"
-			rm -rf "$war"
-			rm -f "$war."*
-			mv -f "$HISTORY_DIR/$f/backup" "$war"
-			touch "$war.dodeploy"
-		fi
+		sleep 1
+		touch "$DEPLOY_DIR/$f.dodeploy"
 	done
 	waitForDeployment onRecoverySuccess onRecoveryFailure $failedlist
 fi
