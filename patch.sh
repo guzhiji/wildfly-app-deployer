@@ -8,6 +8,14 @@ if [ ! -f ./common.sh ] ; then
 fi
 . ./common.sh
 
+onRecoverySuccess() {
+	echo -e "\t${GREEN}$1 recovered${NC}"
+}
+
+onRecoveryFailure() {
+	echo -e "\t${RED}failed to recover $1${NC}"
+}
+
 onSuccess() {
 	if [ -e "$HISTORY_DIR/$1/backup" ] ; then
 		rm -rf "$HISTORY_DIR/$1/backup"
@@ -140,5 +148,5 @@ if [ ! -z "$failedlist" ] ; then
 	do
 		touch "$DEPLOY_DIR/$f.dodeploy"
 	done
-	waitForDeployment onSuccess onFailure $failedlist
+	waitForDeployment onRecoverySuccess onRecoveryFailure $failedlist
 fi

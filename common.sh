@@ -1,5 +1,6 @@
 
 RED='\033[0;31m'
+GREEN='\033[32;40m'
 NC='\033[0m'
 
 loadConf() {
@@ -135,14 +136,15 @@ backupDeployment() {
 
 updateHistory() {
 	name=$1
-	if [ -f "$HISTORY_DIR/$name/new" ] ; then
-		if [ -f "$HISTORY_DIR/$name/lastid" ] ; then
-			nextid=$(cat "$HISTORY_DIR/$name/lastid")
+	hd="$HISTORY_DIR/$name"
+	if [ -f "$hd/new" ] ; then
+		if [ -f "$hd/lastver" ] ; then
+			nextid=$(cat "$hd/lastver")
 			nextid=$(($nextid+1))
 		else
 			nextid=1
 		fi
-		mv -f "$HISTORY_DIR/$name/new" "$HISTORY_DIR/$name/$nextid"
-		echo "$nextid" | tee "$HISTORY_DIR/$name/lastid"
+		mv -f "$hd/new" "$hd/$nextid"
+		echo "$nextid" | tee "$hd/lastver" "$hd/curver"
 	fi
 }
