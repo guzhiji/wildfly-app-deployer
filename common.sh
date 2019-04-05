@@ -148,3 +148,22 @@ updateHistory() {
 		echo "$nextid" | tee "$hd/lastver" "$hd/curver"
 	fi
 }
+
+listVersions() {
+	hd="$HISTORY_DIR/$1"
+	if [[ ! -z "$1" && -d "$hd" ]] ; then
+		cd "$hd"
+		for n in `ls`
+		do
+			if [[ "$n" =~ [0-9]+ && -f "$n" ]] ; then
+				echo "$n"
+			fi
+		done
+		cd - > /dev/null
+	fi
+}
+
+earliestVersion() {
+	listVersions "$1" | sort -g | head -n 1
+}
+

@@ -8,6 +8,8 @@ if [ ! -f ./common.sh ] ; then
 fi
 . ./common.sh
 
+# event handlers
+
 onRecoverySuccess() {
 	echo -e "\t${GREEN}$1 recovered${NC}"
 }
@@ -33,93 +35,140 @@ onFailure() {
 	waitForDeployment onRecoverySuccess onRecoveryFailure "$1"
 }
 
+# functions
+
+removeNewer() {
+	hd="$HISTORY_DIR/$1"
+	if [[ ! -z "$1" && -f "$hd/curver" ]] ; then
+		curver=$(cat "$hd/curver")
+		for n in $(listVersions "$1")
+		do
+			if [ $n -gt $curver ] ; then
+				echo -e "\tremoving version $n"
+				rm -f "$hd/$n"
+			fi
+		done
+		echo "$curver" > "$hd/lastver"
+	fi
+}
+
 revert() {
 	name="$1"
 	ver="$2"
 	hard="$3"
 	war="$DEPLOY_DIR/$name"
-	if [[ -e "$war" && "$ver" =~ [0-9]+ && -f "$HISTORY_DIR/$name/$ver" ]] ; then
-		echo "reverting $name to $ver"
-		curver=$(cat "$HISTORY_DIR/$name/curver")
-		echo -e "\tundeploying the current version: $curver"
-		if [ $(undeploy "$name") == 'ok' ] ; then
-			# extract
-			echo -e "\textracting version $ver"
-			mkdir tmp
-			unzip -q "$HISTORY_DIR/$name/$ver" -d tmp
-			# backup
-			echo -e "\tbacking up version $curver"
-			backupDeployment "$name" 'clean'
-			rm -f "$war."* # remove flag files
-			# deploy
-			echo -e "\tdeploying version $ver"
-			mv -f tmp "$war"
-			# override config files
-			if [ -d "$CONF_DIR/$name" ] ; then
-				cp -rf --backup=none "$CONF_DIR/$name/"* "$war"
-			fi
-			touch "$war.dodeploy"
-			waitForDeployment onSuccess onFailure "$name"
-			if [ -z "$failedlist" ] ; then
-				# update current version
-				echo "$ver" > "$HISTORY_DIR/$name/curver"
-			fi
-			# TODO clean history if hard is true
+	if [[ ! -z "$name" && -e "$war" ]] ; then
+		hd="$HISTORY_DIR/$name"
+		curver=$(cat "$hd/curver")
+		if [[ ! "$ver" =~ [0-9]+ ]] ; then
+			echo -e "${RED}a valid version number required${NC}" >&2
+			exit 1
+		elif [ ! -f "$hd/$ver" ] ; then
+			echo -e "${RED}version $ver does not exist${NC}" >&2
+			exit 1
+		elif [ $ver == $curver ] ; then
+			echo -e "${RED}version $ver already deployed${NC}" >&2
+			exit 1
 		else
-			echo -e "\t${RED}failed to undeploy${NC}"
+			echo "reverting $name to $ver"
+			# undeploy
+			echo -e "\tundeploying the current version: $curver"
+			if [ $(undeploy "$name") == 'error' ] ; then
+				echo -e "\t${RED}failed to undeploy $name${NC}"
+			else
+				# extract
+				echo -e "\textracting version $ver"
+				mkdir tmp
+				unzip -q "$hd/$ver" -d tmp
+				# backup
+				echo -e "\tbacking up version $curver"
+				backupDeployment "$name" 'clean'
+				rm -f "$war."* # remove flag files
+				# deploy
+				echo -e "\tdeploying version $ver"
+				mv -f tmp "$war"
+				# override config files
+				if [ -d "$CONF_DIR/$name" ] ; then
+					cp -rf --backup=none "$CONF_DIR/$name/"* "$war"
+				fi
+				touch "$war.dodeploy"
+				waitForDeployment onSuccess onFailure "$name"
+				if [ -z "$failedlist" ] ; then
+					# update current version
+					echo "$ver" > "$hd/curver"
+					# remove newer versions
+					if [ "$hard" == 'hard' ] ; then
+						removeNewer "$name"
+					fi
+				fi
+			fi
 		fi
 	fi
 }
 
-loadConf
+checkEarlierVersion() {
+	name="$1"
+	ver="$2"
+	if [ $ver -lt $(earliestVersion "$name") ] ; then
+		echo -e "${RED}no earlier version available${NC}" >&2
+		exit 1
+	fi
+}
 
+# configuration
+
+loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 
-name=$1
 
+name=$1
 if [[ -z "$name" || ! -e "$DEPLOY_DIR/$name" ]] ; then
 	echo -e "${RED}a valid deployment name is required${NC}" >&2
 	exit 1
 fi
-
 if [ ! -f "$HISTORY_DIR/$name/lastver" ] ; then
 	echo -e "${RED}no history information available for $name${NC}" >&2
 	exit 1
 fi
 
 if [ -z "$2" ] ; then
+	# soft revert to previous version
+	# revert.sh name
 	curver=$(cat "$HISTORY_DIR/$name/curver")
-	curver=$(($curver-1))
-	if [ $curver -lt 1 ] ; then
-		echo -e "${RED}no earlier version available${NC}"
-		exit 1
-	fi
-	revert "$name" $curver
+	ver=$(($curver-1))
+	checkEarlierVersion "$name" $ver
+	revert "$name" $ver
 else
 	case "$2" in
 		list)
-			cd "$HISTORY_DIR/$name"
-			ls | while read n
-			do
-				if [[ "$n" =~ [0-9]+ && -f "$n" ]] ; then
-					echo "$n"
-				fi
-			done
+			# list all versions
+			# revert.sh name list
+			listVersions "$name" | sort -g
 			;;
-		ver*)
+		ver|version)
+			# show last version and current version
+			# revert.sh name ver
 			echo 'Last Version: '$(cat "$HISTORY_DIR/$name/lastver")
 			echo 'Current Version: '$(cat "$HISTORY_DIR/$name/curver")
 			;;
+		newest|last|latest)
+			# revert to the newest version
+			# revert.sh name newest
+			ver=$(cat "$HISTORY_DIR/$name/lastver")
+			echo "newest version: $ver"
+			revert "$name" $ver
+			;;
 		hard)
+			# hard revert to previous version
+			# revert.sh name hard
 			curver=$(cat "$HISTORY_DIR/$name/curver")
-			curver=$(($curver-1))
-			if [ $curver -lt 1 ] ; then
-				echo -e "${RED}no earlier version available${NC}"
-				exit 1
-			fi
-			revert "$name" $curver 'hard'
+			ver=$(($curver-1))
+			checkEarlierVersion "$name" $ver
+			revert "$name" $ver 'hard'
 			;;
 		*)
+			# revert to a specified version
+			# revert.sh name ver [hard]
 			revert "$name" "$2" "$3"
 			;;
 	esac
