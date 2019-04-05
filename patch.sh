@@ -8,6 +8,8 @@ if [ ! -f ./common.sh ] ; then
 fi
 . ./common.sh
 
+# event handlers
+
 onRecoverySuccess() {
 	echo -e "\t${GREEN}$1 recovered${NC}"
 }
@@ -29,10 +31,12 @@ onFailure() {
 	echo "$1 failed"
 }
 
-loadConf
+# configuration
 
+loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 CUR_DIR="$PWD"
+
 applist=
 for f in *
 do
@@ -80,7 +84,7 @@ do
 		.tar.xz) tar -xJf "$f" -C tmp ;;
 	esac
 	if [ $? != 0 ] ; then
-		echo -e "\tfailed to extract patch file"
+		echo -e "\t${RED}failed to extract patch file${NC}"
 		rm -rf tmp
 		continue
 	fi
@@ -99,7 +103,7 @@ do
 		fi
 	done
 	if [ "$dirfound" == 'n' ] ; then
-		echo -e "\tthe patch file $f does not contain WEB-INF"
+		echo -e "\t${RED}the patch file $f does not contain WEB-INF${NC}"
 		cd "$CUR_DIR"
 		rm -rf tmp
 		continue
@@ -126,6 +130,9 @@ do
 	# archive the patched app
 	echo -e "\tarchiving the patched version"
 	cd "$war"
+	if [ -f "$HISTORY_DIR/$name/new" ] ; then
+		rm -f "$HISTORY_DIR/$name/new"
+	fi
 	jar -cf "$HISTORY_DIR/$name/new" .
 	cd - > /dev/null
 	# re-deploy

@@ -30,7 +30,7 @@ onFailure() {
 	echo -e "\t${RED}failed to deploy $1${NC}"
 	echo
 	echo "Recovery: $1"
-	recoverWarFiles "$1"
+	recoverWarFiles "$1" > /dev/null
 	touch "$DEPLOY_DIR/$1.dodeploy"
 	waitForDeployment onRecoverySuccess onRecoveryFailure "$1"
 }
@@ -121,7 +121,7 @@ loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 
 
-name=$1
+name="$1"
 if [[ -z "$name" || ! -e "$DEPLOY_DIR/$name" ]] ; then
 	echo -e "${RED}a valid deployment name is required${NC}" >&2
 	exit 1
