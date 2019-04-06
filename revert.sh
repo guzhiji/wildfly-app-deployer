@@ -10,14 +10,6 @@ fi
 
 # event handlers
 
-onRecoverySuccess() {
-	echo -e "\t${GREEN}$1 recovered${NC}"
-}
-
-onRecoveryFailure() {
-	echo -e "\t${RED}failed to recover $1${NC}"
-}
-
 onSuccess() {
 	echo -e "\t${GREEN}$1 deployed${NC}"
 	if [ -e "$HISTORY_DIR/$1/backup" ] ; then
@@ -30,9 +22,7 @@ onFailure() {
 	echo -e "\t${RED}failed to deploy $1${NC}"
 	echo
 	echo "Recovery: $1"
-	recoverWarFiles "$1" > /dev/null
-	touch "$DEPLOY_DIR/$1.dodeploy"
-	waitForDeployment onRecoverySuccess onRecoveryFailure "$1"
+	recover "$1"
 }
 
 # functions
@@ -70,7 +60,7 @@ revert() {
 			echo -e "${RED}version $ver already deployed${NC}" >&2
 			exit 1
 		else
-			echo "reverting $name to $ver"
+			echo "reverting $name to version $ver"
 			# undeploy
 			echo -e "\tundeploying the current version: $curver"
 			if [ $(undeploy "$name") == 'error' ] ; then
@@ -83,7 +73,6 @@ revert() {
 				# backup
 				echo -e "\tbacking up version $curver"
 				backupDeployment "$name" 'clean'
-				rm -f "$war."* # remove flag files
 				# deploy
 				echo -e "\tdeploying version $ver"
 				mv -f tmp "$war"
@@ -91,9 +80,8 @@ revert() {
 				if [ -d "$CONF_DIR/$name" ] ; then
 					cp -rf --backup=none "$CONF_DIR/$name/"* "$war"
 				fi
-				touch "$war.dodeploy"
-				waitForDeployment onSuccess onFailure "$name"
-				if [ -z "$failedlist" ] ; then
+				deploy "$name" onSuccess onFailure
+				if [ $? == 0 ] ; then
 					# update current version
 					echo "$ver" > "$hd/curver"
 					# remove newer versions
