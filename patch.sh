@@ -10,25 +10,19 @@ fi
 
 # event handlers
 
-onRecoverySuccess() {
-	echo -e "\t${GREEN}$1 recovered${NC}"
-}
-
-onRecoveryFailure() {
-	echo -e "\t${RED}failed to recover $1${NC}"
-}
-
 onSuccess() {
+	nextid=$(updateHistory "$1")
+	echo -e "\t${GREEN}$1 deployed (version: $nextid)${NC}"
 	if [ -e "$HISTORY_DIR/$1/backup" ] ; then
 		rm -rf "$HISTORY_DIR/$1/backup"
 	fi
-	nextid=$(updateHistory "$1")
-	echo "$1 deployed (version: $nextid)"
 }
 
 onFailure() {
 	rm -f "$HISTORY_DIR/$1/new"
-	echo "$1 failed"
+	echo -e "\t${RED}failed to deploy $1${NC}"
+	echo -e "\trecovering"
+	recover "$1"
 }
 
 # configuration
@@ -37,7 +31,8 @@ loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 CUR_DIR="$PWD"
 
-applist=
+# main
+
 for f in *
 do
 	# validate the current file
@@ -116,7 +111,6 @@ do
 		rm -rf tmp
 		continue
 	fi
-	rm -f "$war."*
 	# backup the original app
 	echo -e "\tbacking up"
 	backupDeployment "$name"
@@ -136,24 +130,10 @@ do
 	jar -cf "$HISTORY_DIR/$name/new" .
 	cd - > /dev/null
 	# re-deploy
-	touch "$war.dodeploy"
-	applist="$applist $name"
+	echo -e "\tdeploying"
+	deploy "$name" onSuccess onFailure
 	# clean up
 	echo -e "\tcleaning up"
 	cd "$CUR_DIR"
 	rm -rf tmp
 done
-
-echo
-echo 'Waiting for deployment:'"$applist"
-waitForDeployment onSuccess onFailure $applist
-
-if [ ! -z "$failedlist" ] ; then
-	echo
-	echo "Recovery: $failedlist"
-	for f in $(recoverWarFiles $failedlist)
-	do
-		touch "$DEPLOY_DIR/$f.dodeploy"
-	done
-	waitForDeployment onRecoverySuccess onRecoveryFailure $failedlist
-fi

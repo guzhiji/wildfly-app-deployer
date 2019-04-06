@@ -10,14 +10,6 @@ fi
 
 # event handlers
 
-onRecoverySuccess() {
-	echo -e "\t${GREEN}$1 recovered${NC}"
-}
-
-onRecoveryFailure() {
-	echo -e "\t${RED}failed to recover $1${NC}"
-}
-
 onSuccess() {
 	echo -e "\t${GREEN}$1 deployed${NC}"
 	if [ -e "$HISTORY_DIR/$1/backup" ] ; then
@@ -27,11 +19,9 @@ onSuccess() {
 }
 
 onFailure() {
-	echo -e "\t${RED}$1 failed${NC}"
+	echo -e "\t${RED}failed to deploy $1${NC}"
 	echo -e "\trecovering"
-	recoverWarFiles "$1" > /dev/null
-	touch "$DEPLOY_DIR/$1.dodeploy"
-	waitForDeployment onRecoverySuccess onRecoveryFailure "$1"
+	recover "$1"
 }
 
 # configuration
@@ -48,7 +38,6 @@ do
 			# temporarily undeploy the war
 			echo -e "\tundeploying temporarily"
 			if [ $(undeploy "$f") == 'ok' ] ; then
-				rm -f "$war."*
 				# backup the original war
 				echo -e "\tbacking up"
 				backupDeployment "$f"
@@ -57,8 +46,7 @@ do
 				cp -rf --backup=none "$CONF_DIR/$f/"* "$war"
 				# re-deploy
 				echo -e "\tdeploying"
-				touch "$war.dodeploy"
-				waitForDeployment onSuccess onFailure "$f"
+				deploy "$f" onSuccess onFailure
 			else
 				echo -e "\t${RED}failed to undeploy $f${NC}"
 			fi
