@@ -13,7 +13,7 @@ fi
 onDeploymentSuccess() {
 	nextid=$(updateHistory "$1")
 	echo -e "\t${GREEN}$1 deployed (version: $nextid)${NC}"
-	if [ -f "$HISTORY_DIR/$1/backup" ] ; then
+	if [ -e "$HISTORY_DIR/$1/backup" ] ; then
 		echo -e "\tcleaning up"
 		rm -rf "$HISTORY_DIR/$1/backup"
 	fi

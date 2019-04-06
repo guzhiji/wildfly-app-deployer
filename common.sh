@@ -179,17 +179,17 @@ backupDeployment() {
 }
 
 updateHistory() {
-	name=$1
+	name="$1"
 	hd="$HISTORY_DIR/$name"
 	if [ -f "$hd/new" ] ; then
-		if [ -f "$hd/lastver" ] ; then
-			nextid=$(cat "$hd/lastver")
-			nextid=$(($nextid+1))
+		nextver=$(latestVersion "$name")
+		if [ -z "$nextver" ] ; then
+			nextver=1
 		else
-			nextid=1
+			nextver=$(($nextver+1))
 		fi
-		mv -f "$hd/new" "$hd/$nextid"
-		echo "$nextid" | tee "$hd/lastver" "$hd/curver"
+		mv -f "$hd/new" "$hd/$nextver"
+		echo "$nextver" | tee "$hd/curver"
 	fi
 }
 
@@ -209,5 +209,9 @@ listVersions() {
 
 earliestVersion() {
 	listVersions "$1" | sort -g | head -n 1
+}
+
+latestVersion() {
+	listVersions "$1" | sort -gr | head -n 1
 }
 

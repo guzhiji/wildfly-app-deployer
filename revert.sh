@@ -38,7 +38,29 @@ removeNewer() {
 				rm -f "$hd/$n"
 			fi
 		done
-		echo "$curver" > "$hd/lastver"
+	fi
+}
+
+keepVersions() {
+	hd="$HISTORY_DIR/$1"
+	if [[ ! -z "$1" && -f "$hd/curver" ]] ; then
+		if [[ ! "$2" =~ [1-9][0-9]* ]] ; then
+			echo -e "${RED}please specify a number of versions to keep${NC}"
+			exit 1
+		elif [ $2 -lt 3 ] ; then
+			echo -e "${RED}at least 3 versions to keep${NC}"
+			exit 1
+		fi
+		curver=$(cat "$hd/curver")
+		v=$(($curver-$2+1))
+		echo "keep $2 versions from the current one (version: $curver)"
+		for n in $(listVersions "$1")
+		do
+			if [ $n -lt $v ] ; then
+				echo -e "\tremoving version $n"
+				rm -f "$hd/$n"
+			fi
+		done
 	fi
 }
 
@@ -114,7 +136,7 @@ if [[ -z "$name" || ! -e "$DEPLOY_DIR/$name" ]] ; then
 	echo -e "${RED}a valid deployment name is required${NC}" >&2
 	exit 1
 fi
-if [ ! -f "$HISTORY_DIR/$name/lastver" ] ; then
+if [ ! -f "$HISTORY_DIR/$name/curver" ] ; then
 	echo -e "${RED}no history information available for $name${NC}" >&2
 	exit 1
 fi
@@ -134,16 +156,21 @@ else
 			listVersions "$name" | sort -g
 			;;
 		ver|version)
-			# show last version and current version
+			# show the latest version and current version
 			# revert.sh name ver
-			echo 'Last Version: '$(cat "$HISTORY_DIR/$name/lastver")
-			echo 'Current Version: '$(cat "$HISTORY_DIR/$name/curver")
+			echo 'latest version: '$(latestVersion "$name")
+			echo 'current version: '$(cat "$HISTORY_DIR/$name/curver")
+			;;
+		keep)
+			# keep recent n versions
+			# revert.sh name keep n
+			keepVersions "$name" "$3"
 			;;
 		newest|last|latest)
 			# revert to the newest version
 			# revert.sh name newest
-			ver=$(cat "$HISTORY_DIR/$name/lastver")
-			echo "newest version: $ver"
+			ver=$(latestVersion "$name")
+			echo "latest version: $ver"
 			revert "$name" $ver
 			;;
 		hard)
