@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+SCRIPT_PATH=`dirname "$0"`
+SCRIPT="$SCRIPT_PATH/deploy.sh"
+LIB="$SCRIPT_PATH/common.sh"
+if [ ! -f "$SCRIPT" ] ; then
+	echo 'deploy.sh implementation not found' >&2
+	exit 1
+fi
+if [ ! -f "$LIB" ] ; then
+	echo 'common.sh implementation not found' >&2
+	exit 1
+fi
+if [ -f "$SCRIPT_PATH/local.conf" ] ; then
+	. "$SCRIPT_PATH/local.conf"
+fi
+
+filelist=
+for f in $@
+do
+	if [[ "$f" =~ \.war$ ]] ; then
+		filelist="$filelist $f"
+	fi
+done
+
+if [ -z "$filelist" ] ; then
+	echo 'nothing to deploy' >&2
+	exit 1
+fi
+echo "Files: $filelist"
+if [ -z "$WILDFLY_SERVER" ] ; then
+	cp -f $filelist "$SCRIPT_PATH"
+	bash "$SCRIPT"
+else
+	_SCRIPT="$SCRIPT_PATH/_deploy.sh"
+	_LIB="$SCRIPT_PATH/_common.sh"
+	cp -f "$SCRIPT" "$_SCRIPT"
+	cp -f "$LIB" "$_LIB"
+	filelist="$filelist $_SCRIPT $_LIB"
+	if [ -z "$TMP_DIR" ] ; then
+		TMP_DIR='~/deploy_tmp'
+	fi
+	scp $filelist "$WILDFLY_SERVER:$TMP_DIR"
+	rm -f "$_SCRIPT" "$_LIB"
+	ssh "$WILDFLY_SERVER" "bash $TMP_DIR/_deploy.sh"
+fi

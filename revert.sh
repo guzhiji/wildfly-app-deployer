@@ -130,6 +130,7 @@ checkEarlierVersion() {
 loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 
+# main
 
 name="$1"
 if [[ -z "$name" || ! -e "$DEPLOY_DIR/$name" ]] ; then

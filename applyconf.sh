@@ -29,6 +29,8 @@ onFailure() {
 loadConf
 DEPLOY_DIR="$JBOSS_HOME/standalone/deployments"
 
+# main
+
 for f in $@
 do
 	war="$DEPLOY_DIR/$f"
