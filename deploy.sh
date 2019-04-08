@@ -2,11 +2,18 @@
 cd `dirname "$0"`
 
 # load common
-if [ ! -f ./common.sh ] ; then
+commonLoaded='n'
+if [ -f ./common.sh ] ; then
+	. ./common.sh
+	commonLoaded='y'
+elif [ -f ./_common.sh ] ; then
+	. ./_common.sh
+	commonLoaded='y'
+fi
+if [ "$commonLoaded" == 'n' ] ; then
 	echo 'cannot load common.sh library' >&2
 	exit 1
 fi
-. ./common.sh
 
 # event handlers
 
@@ -83,3 +90,5 @@ do
 		deploy "$f" onDeploymentSuccess onDeploymentFailure
 	fi
 done
+
+rm -f '_deploy.sh' '_common.sh' 2>/dev/null

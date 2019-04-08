@@ -14,6 +14,7 @@ fi
 if [ -f "$SCRIPT_PATH/local.conf" ] ; then
 	. "$SCRIPT_PATH/local.conf"
 fi
+echo "WILDFLY_SERVER: $WILDFLY_SERVER"
 
 filelist=
 for f in $@
@@ -37,10 +38,10 @@ else
 	cp -f "$SCRIPT" "$_SCRIPT"
 	cp -f "$LIB" "$_LIB"
 	filelist="$filelist $_SCRIPT $_LIB"
-	if [ -z "$TMP_DIR" ] ; then
-		TMP_DIR='~/deploy_tmp'
+	if [ -z "$WILDFLY_DEPLOY_TMP" ] ; then
+		WILDFLY_DEPLOY_TMP='~/deploy_tmp'
 	fi
-	scp $filelist "$WILDFLY_SERVER:$TMP_DIR"
+	scp $filelist "$WILDFLY_SERVER:$WILDFLY_DEPLOY_TMP"
 	rm -f "$_SCRIPT" "$_LIB"
-	ssh "$WILDFLY_SERVER" "bash $TMP_DIR/_deploy.sh"
+	ssh "$WILDFLY_SERVER" "bash $WILDFLY_DEPLOY_TMP/_deploy.sh"
 fi
